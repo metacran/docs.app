@@ -1,7 +1,7 @@
 var express = require('express');
 var router = express.Router();
 
-var broker_url = process.env.BROKER_URL || 'amqp://localhost';
+var broker_url = process.env.RABBITMQ_URL || 'amqp://localhost';
 
 var re_full = new RegExp('^/build/readme/([\\w\\.]+)$');
 router.get(re_full, function(req, res) {
