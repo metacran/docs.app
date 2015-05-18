@@ -4,6 +4,8 @@ var amqp = require('amqplib');
 var when = require('when');
 var request = require('request');
 
+var crandb = 'http://crandb.r-pkg.org';
+
 var broker_url = process.env.RABBITMQ_URL || 'amqp://localhost';
 
 var re_full1 = new RegExp('^/build/readme/([\\w\\.]+)$');
@@ -16,6 +18,17 @@ var re_full2 = new RegExp('^/build/news/([\\w\\.]+)$');
 router.get(re_full2, function(req, res) {
     var package = req.params[0];
     queue_this('news', package, res);
+})
+
+router.get('/build/news/all-packages', function(req, res) {
+    var url = crandb + '/-/desc';
+    request(url, function(error, response, body) {
+	if (error || response.statusCode != 200) {
+	    return console.log("Cannot connect to CRANDB");
+	}
+	var pkgs = Object.keys(JSON.parse(body));
+	queue_these('news', pkgs, res, "all-packages");
+    })
 })
 
 function queue_this(type, item, res) {
@@ -63,35 +76,41 @@ router.get('/build/readme/rebuild-existing', function(req, res) {
 	    .rows
 	    .map(function(x) { return x["id"]; });
 
-	amqp.connect(broker_url).then(function(conn) {
-	    return when(conn.createChannel().then(function(ch) {
-		var ok = ch.assertQueue(q, { durable: true })
-		    .then(function() { return 0; });
-
-		for (p in docs) {
-		    ok = ok.then(function(p) {
-			var package = docs[p];
-			var entry = { 'package': package,
-				      'added_at': new Date().toISOString(),
-				      'added_by': 'docs.app/rebuild-existing' };
-			var msg = JSON.stringify(entry);
-			console.log(entry);
-			ch.sendToQueue(q, new Buffer(msg),
-				       { deliveryMose: true });
-			return p + 1;
-		    });
-		}
-
-		return ok.then(function() { return ch.close(); });
-	    })).ensure(function() { conn.close(); });
-	}).then(null, console.warn);
-
-	res.set('Content-Type', 'application/json')
-	    .send({ 'operation': 'rebuild-existing',
-		    'type': 'readme',
-		    'result': 'OK' })
-	    .end();
+	queue_these('readme', docs, res, 'build-existing')
     })
 })
+
+function queue_these(type, pkgs, res, operation) {
+    var q = type;
+
+    amqp.connect(broker_url).then(function(conn) {
+	return when(conn.createChannel().then(function(ch) {
+	    var ok = ch.assertQueue(q, { durable: true })
+		.then(function() { return 0; });
+
+	    for (p in pkgs) {
+		ok = ok.then(function(p) {
+		    var package = pkgs[p];
+		    var entry = { 'package': package,
+				  'added_at': new Date().toISOString(),
+				  'added_by': 'docs.app/all-packages' };
+		    var msg = JSON.stringify(entry);
+		    console.log(entry);
+		    ch.sendToQueue(q, new Buffer(msg),
+				   { deliveryMose: true });
+		    return p + 1;
+		});
+	    }
+
+	    return ok.then(function() { return ch.close(); });
+	})).ensure(function() { conn.close(); });
+    }).then(null, console.warn);
+
+    res.set('Content-Type', 'application/json')
+	.send({ 'operation': operation,
+		'type': type,
+		'result': 'OK' })
+	.end();
+}
 
 module.exports = router;
