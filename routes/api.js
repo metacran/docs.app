@@ -20,6 +20,13 @@ router.get(re_full2, function(req, res) {
     queue_this('news', package, res);
 })
 
+var re_full3 = new RegExp('^/build/task-view/(.*)$');
+router.get(re_full3, function(req, res) {
+    var tv = req.params[0];
+    console.log(tv)
+    queue_this('task-view', tv, res);
+})
+
 router.get('/build/news/all-packages', function(req, res) {
     var url = crandb + '/-/desc';
     request(url, function(error, response, body) {
