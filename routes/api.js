@@ -5,17 +5,27 @@ var when = require('when');
 var request = require('request');
 
 var broker_url = process.env.RABBITMQ_URL || 'amqp://localhost';
-var q = 'readme';
 
-var re_full = new RegExp('^/build/readme/([\\w\\.]+)$');
-router.get(re_full, function(req, res) {
+var re_full1 = new RegExp('^/build/readme/([\\w\\.]+)$');
+router.get(re_full1, function(req, res) {
     var package = req.params[0];
+    queue_this('readme', package, res);
+})
+
+var re_full2 = new RegExp('^/build/news/([\\w\\.]+)$');
+router.get(re_full2, function(req, res) {
+    var package = req.params[0];
+    queue_this('news', package, res);
+})
+
+function queue_this(type, item, res) {
+    var q = type;
 
     amqp.connect(broker_url).then(function(conn) {
 	return when(conn.createChannel().then(function(ch) {
 	    var ok = ch.assertQueue(q, { durable: true });
 
-	    var entry = { 'package': package,
+	    var entry = { 'package': item,
 			  'added_at': new Date().toISOString(),
 			  'added_by': 'docs.app' };
 
@@ -29,17 +39,18 @@ router.get(re_full, function(req, res) {
 
     res.set('Content-Type', 'application/json')
 	.send({ 'operation': 'add',
-		'type': 'readme',
-		'package': package,
+		'type': type,
+		'package': item,
 		'result': 'OK' })
 	.end();
-})
+}
 
 // Rebuild all existing READMEs
 
 router.get('/build/readme/rebuild-existing', function(req, res) {
     var couch_url = process.env.DOCSDB_URL || 'http://127.0.0.1:5984';
     var url = couch_url + '/readme/_all_docs';
+    var q = 'readme';
     request(url, function(error, response, body) {
 	if (error || response.statusCode != 200) {
 	    res.set('Content-Type', 'application/json')
