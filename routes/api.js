@@ -87,6 +87,17 @@ router.get('/build/readme/rebuild-existing', function(req, res) {
     })
 })
 
+router.get('/build/readme/all-packages', function(req, res) {
+    var url = crandb + '/-/desc';
+    request(url, function(error, response, body) {
+	if (error || response.statusCode != 200) {
+	    return console.log("Cannot connect to CRANDB");
+	}
+	var pkgs = Object.keys(JSON.parse(body));
+	queue_these('readme', pkgs, res, "all-packages");
+    })
+})
+
 function queue_these(type, pkgs, res, operation) {
     var q = type;
 
